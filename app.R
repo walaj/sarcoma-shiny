@@ -17,7 +17,7 @@ if (!exists("dt.gtex.melt") ||
     !exists("gr.t.major") || 
     !exists("gr.t.flat") || 
     !exists("dt.mem") || 
-    !exists("fo") || 
+    !exists("dt_cn_exp") || 
     !exists("memgtex")) {
   
   # Load GTEx data
@@ -50,15 +50,6 @@ if (!exists("dt.gtex.melt") ||
   # Load membrane protein database
   dt.mem <- readRDS(file.path(datadir, "dt_mem.rds"))
   
-  ## overlap CN with expression
-  # fo <- gr2dt(gr.findoverlaps(gr.t, gr.rna))
-  # fo[, bg24 := gr.rna$bostongene_2024.09[subject.id]]
-  # fo[, GeneID := gr.rna$GeneID[subject.id]]
-  # fo[, cn := gr.t$mcols.cn[query.id]]
-  # fo[, jittercn := cn + runif(.N, min = -0.2, max = 0.2)]
-  # ## overlap with membrane data
-  # fo[, membrane := ifelse(GeneID %in% dt.mem$gene_name, "Membrane","non-membrane")]
-  # 
   ## load gTrack data if available
   if (requireNamespace("gdTrack", quietly = TRUE)) {
     
@@ -85,6 +76,18 @@ if (!exists("dt.gtex.melt") ||
                                           mcols = dt.raw[, .(tumor_vs_blood.tumour)]))
     cnRaw <- gTrack(gr.raw, y.field = "mcols.tumor_vs_blood.tumour")
   }
+  
+  ## overlap CN with expression
+  # dt_cn_exp <- gr2dt(gr.findoverlaps(gr.t, gr.rna))
+  # dt_cn_exp[, bg24 := gr.rna$bostongene_2024.09[subject.id]]
+  # dt_cn_exp[, GeneID := gr.rna$GeneID[subject.id]]
+  # dt_cn_exp[, cn := gr.t$mcols.cn[query.id]]
+  # dt_cn_exp[, jittercn := cn + runif(.N, min = -0.2, max = 0.2)]
+  # ## overlap with membrane data
+  # dt_cn_exp[, membrane := ifelse(GeneID %in% dt.mem$gene_name, "Membrane","non-membrane")]
+
+  ## load copy-number v expression
+  dt_cn_exp <- readRDS(file.path(datadir, "dt_cn_expression.rds"))
   
   ## load membrane data combined with SS data 
   memgtex <- readRDS(file.path(datadir, "membrane_gtex.rds"))
@@ -231,10 +234,10 @@ server <- function(input, output) {
   })
   
   output$cnePlot <- renderPlotly({
-    fo[, is_target := FALSE] ## reset
-    fo[, is_target:= GeneID==selected_gene() ]
+    dt_cn_exp[, is_target := FALSE] ## reset
+    dt_cn_exp[, is_target:= GeneID==selected_gene() ]
     plot_ly() %>%
-      add_trace(data = fo[fo$membrane != "Membrane", ], 
+      add_trace(data = dt_cn_exp[dt_cn_exp$membrane != "Membrane", ], 
                 x = ~jittercn, 
                 y = ~bg24, 
                 text = ~GeneID, 
@@ -242,7 +245,7 @@ server <- function(input, output) {
                 mode = 'markers',
                 name = "Non-Membrane",
                 marker = list(size = 4, opacity = 0.5, color="black")) %>%
-      add_trace(data = fo[fo$membrane == "Membrane", ], 
+      add_trace(data = dt_cn_exp[dt_cn_exp$membrane == "Membrane", ], 
                 x = ~jittercn, 
                 y = ~bg24, 
                 text = ~GeneID, 
@@ -250,7 +253,7 @@ server <- function(input, output) {
                 mode = 'markers',
                 name = "Membrane",
                 marker = list(size = 4, opacity = 1, color = "red")) %>%
-      add_trace(data = fo[is_target==TRUE, ], 
+      add_trace(data = dt_cn_exp[is_target==TRUE, ], 
                 x = ~jittercn, 
                 y = ~bg24, 
                 text = ~GeneID, 
